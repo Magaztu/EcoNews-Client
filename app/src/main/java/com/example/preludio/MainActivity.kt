@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Icon
@@ -29,6 +30,37 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import com.example.preludio.ui.theme.PreludioTheme
+
+data class Usuario(
+    val nombre: String,
+    val email: String,
+    val isAdmin: Boolean,
+    var bio: String = "",
+    var carrera: String  =""
+)
+// Por ahora usaré usuarios como objetos, no sé si sea compatible con la db
+
+data class Post(
+    val id: Int,
+    val autor: String,
+    val contenido: String,
+    val categoria: String = "General",
+    val fecha: String = "Ahora", // Debería cambiarlo por un date.now().toString o algo asi
+)
+
+data class Evento(
+    val id: Int,
+    val titulo: String,
+    val fecha: String,
+    val descripcion: String,
+    var isRegistrado: Boolean = false
+)
+
+data class Servicio(
+    val nombre: String,
+    val icon: ImageVector, // supongo que es como los enums
+    val info: String
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,7 +115,7 @@ enum class AppDestinations(
     val label: String,
     val icon: ImageVector,
 ) {
-    ANUNCIOS("Anuncios", Icons.Default.Home),
+    ANUNCIOS("Anuncios", Icons.Default.Notifications),
     COMUNIDAD("Comunidad", Icons.Default.ShoppingCart),
     SERVICIOS("Servicios", Icons.Default.Search),
     EVENTOS("Eventos", Icons.Default.DateRange),
