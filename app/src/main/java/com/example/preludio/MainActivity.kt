@@ -196,6 +196,11 @@ fun PreludioApp(currentUser: Usuario) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.ANUNCIOS) }
     // Guarda la posición actual del usuario en la app, similar a los checkboxes
 
+    var showCreateDialog by remember { mutableStateOf(false) }
+    // Para mostrar dialogos en algunas partes
+
+    val context = LocalContext.current
+
     //Esta parte en verde se encarga de definir la posición de la barra de navegación
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -216,11 +221,46 @@ fun PreludioApp(currentUser: Usuario) {
         }
     ) {
         // El modifier que hemos visto en clase está aquí
-        Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            Greeting(
-                name = "Android",
-                modifier = Modifier.padding(innerPadding)
-            )
+        Scaffold(topBar = {
+            if (currentDestination != AppDestinations.PERFIL){
+                CenterAlignedTopAppBar(
+                    title = {Text("EcoNews")},
+                    actions = {
+                        // Aqui pongo las bolitas de crear cosas si es user o admin
+                        val canPostAnuncio = currentDestination == AppDestinations.ANUNCIOS && currentUser.isAdmin
+                        val canPostComunidad = currentDestination == AppDestinations.COMUNIDAD
+                        val canPostEvento = currentDestination == AppDestinations.EVENTOS && currentUser.isAdmin
+
+                        if(canPostAnuncio || canPostComunidad || canPostEvento){
+                            IconButton(onClick = {showCreateDialog = true}) {
+                                Icon(Icons.Default.Add, contentDescription = "Crear")
+                            }
+                        }
+
+                    }
+                )
+        }
+        }) { innerPadding ->
+            // Hace que la barrita de arriba tenga padding apra cada pantalla
+            Box(modifier = Modifier.padding(innerPadding)){
+                when (currentDestination){
+                    AppDestinations.ANUNCIOS -> AnunciosScreen(currentUser)
+                    AppDestinations.COMUNIDAD -> ComunidadScreen(currentUser)
+                    AppDestinations.SERVICIOS -> ServiciosScreen(currentUser)
+                    AppDestinations.EVENTOS -> EventosScreen(currentUser)
+                    AppDestinations.PERFIL -> PerfilScreen(currentUser)
+                }
+            }
+            if (showCreateDialog){
+                CreatePostDialog(
+                    destination = currentDestination,
+                    onDismiss = {showCreateDialog = false},
+                    onSubmit = {text, categoria ->
+                        Toast.makeText(context, "Se creó en ${currentDestination.label}: $text", Toast.LENGTH_SHORT).show()
+                        showCreateDialog = false
+                    }
+                )
+            }
         }
     }
 }
@@ -238,13 +278,42 @@ enum class AppDestinations(
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    // Muestra un bloque de texto en pantalla
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
+fun AnunciosScreen(user: Usuario){
+
 }
+
+@Composable
+fun ComunidadScreen(user: Usuario){
+
+}
+@Composable
+fun ServiciosScreen(user: Usuario){
+
+}
+
+@Composable
+fun EventosScreen(user: Usuario){
+
+}
+
+@Composable
+fun PerfilScreen(user: Usuario){
+
+}
+
+@Composable
+fun CreatePostDialog(destination: AppDestinations, onDismiss: () -> Unit, onSubmit: (String, String) -> Unit){
+
+}
+
+//@Composable
+//fun Greeting(name: String, modifier: Modifier = Modifier) {
+//    // Muestra un bloque de texto en pantalla
+//    Text(
+//        text = "Hello $name!",
+//        modifier = modifier
+//    )
+//}
 
 // Preview para greeting que permtie ver su uso sin compilar el proyecto
 //@Preview(showBackground = true)
