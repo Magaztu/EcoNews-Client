@@ -122,7 +122,9 @@ fun LoginApp(onLoginSuccess: (Usuario) -> Unit){ // Recursivo como en Pybodrio, 
     var context = LocalContext.current
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally // Autocompletado de android studio, pero
                                                         // Entiendo que es ccomo align items en html
@@ -279,12 +281,82 @@ enum class AppDestinations(
 
 @Composable
 fun AnunciosScreen(user: Usuario){
+    // Simular entrdas hasta que me salga bien la base de datos
+    val posts = remember { listOf(
+        Post(1,"Mathias", "Clases canceladas por el presidente", "General"),
+        Post(2,"Dylan", "Mañana habre el nuevo complejo", "General"),
+        ) }
+    // Los lazy columns son básicamente listas scrolleables
+    LazyColumn(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)){
+        item {Text("Anuncios oficiales", style = MaterialTheme.typography.titleMedium)}
 
+        // Crea un "titulo" y luego para cada post muestra su info
+        items(posts) {
+            post -> Card(modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(post.contenido, style = MaterialTheme.typography.bodyLarge)
+                    Text(post.fecha, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    if (user.isAdmin){
+                        TextButton(onClick = { }) { Text("ELIMINAR", color = Color.Red)}
+                    }
+                    // Borar sólo admins
+                }
+            }
+        }
+    }
 }
 
 @Composable
 fun ComunidadScreen(user: Usuario){
+    var filtro by remember { mutableStateOf("Todos") }
+    val categorias = listOf("Todos", "Comida", "Servicios", "Materiales")
+    val posts = listOf(
+        Post(1, "Jorge", "Vendo calculadora", "Materiales"),
+        Post(2,"Maria","Se realizan perforaciones", "Servicios"),
+        Post(3, "Paco", "Vendo chimichangas", "Comida")
+    )
+    val postsFiltrados = if (filtro == "Todos") posts else posts.filter { it.categoria == filtro }
+    // Filtrar por categoria
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            categorias.forEach { card ->
+                // Estas son tarjetitas que filtran automaticamente el contenido
+                // Sus opciones se parecen mucho a los checkboxes / radio buttons
+                FilterChip(
+                    selected = filtro == card,
+                    onClick = { filtro = card },
+                    label = { Text(card) }
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
 
+        LazyColumn{
+            items(postsFiltrados){ post ->
+                Card(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()){
+                            Text(post.autor, style = MaterialTheme.typography.titleSmall)
+                            SuggestionChip(onClick = {}, label = { Text(post.categoria) })
+                        }
+                        Text(post.contenido)
+                        // Borrar sólo si es admin o autor
+                        if (user.isAdmin||user.nombre == post.autor){
+                            TextButton(onClick = { }) { Text("ELIMINAR", color = Color.Red)}
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 @Composable
 fun ServiciosScreen(user: Usuario){
