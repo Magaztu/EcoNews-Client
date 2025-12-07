@@ -438,12 +438,90 @@ fun EventosScreen(user: Usuario){
 
 @Composable
 fun PerfilScreen(user: Usuario){
+    var bio by remember { mutableStateOf(user.bio) }
+    var carrera by remember { mutableStateOf(user.carrera) }
+    val context = LocalContext.current
 
+    Column(modifier = Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        // Simula fotito de perfil
+        Icon(Icons.Default.AccountCircle, null, modifier = Modifier.size(100.dp), tint = Color.Gray)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(user.nombre, style = MaterialTheme.typography.headlineMedium)
+        Text(user.email, color = Color.Gray)
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = carrera,
+            onValueChange = { carrera = it },
+            label = { Text("Career") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = bio,
+            onValueChange = { bio = it },
+            label = { Text("Bio / Status") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(onClick = {
+            // Actualizar campos
+            user.carrera = carrera
+            user.bio = bio
+            Toast.makeText(context, "Perfil actualizado", Toast.LENGTH_SHORT).show()
+        }) {
+            Text("Guardar cambios")
+        }
+    }
 }
 
 @Composable
 fun CreatePostDialog(destination: AppDestinations, onDismiss: () -> Unit, onSubmit: (String, String) -> Unit){
+    var text by remember { mutableStateOf("") }
+    var categoriaSeleccionada by remember { mutableStateOf("Materiales") }
+    val categorias = listOf("Materiales", "Servicios", "Comida")
 
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Crear post en ${destination.label}", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Dialogos para crear psots en eventosm comunidad y anuncios
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Contenido") },
+                    modifier = Modifier.fillMaxWidth().height(150.dp)
+
+                )
+                //En el caso de comunidad, se puede elegir una categoria
+                if(destination == AppDestinations.COMUNIDAD){
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Categoría:")
+
+                    categorias.forEach { card ->
+                        Row {
+                            FilterChip(
+                                selected = categoriaSeleccionada == card,
+                                onClick = { categoriaSeleccionada = card },
+                                label = { Text(card) },
+                                modifier = Modifier.fillMaxWidth().padding(end = 4.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onDismiss) { Text("Cancelar")}
+                    Button(onClick = { onSubmit(text, categoriaSeleccionada) }) { Text("Post") }
+                }
+            }
+        }
+    }
 }
 
 //@Composable
