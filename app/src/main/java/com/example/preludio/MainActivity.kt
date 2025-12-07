@@ -360,12 +360,80 @@ fun ComunidadScreen(user: Usuario){
 }
 @Composable
 fun ServiciosScreen(user: Usuario){
+    val servicios = listOf(
+        Servicio("Ecobuses", Icons.Default.DirectionsBus, "Ruta 6: La Joya"),
+        Servicio("Gimnasio", Icons.Default.FitnessCenter, "Abierto de 7:30 a 21:30, traer ropa deportiva"),
+        Servicio("Naturissímo", Icons.Default.Restaurant,"Combos desde $3.99"),
+        Servicio("Biblioteca", Icons.Default.LocalLibrary, "Registrarse con QR al ingresar")
+    )
+    var servicioElegido by remember { mutableStateOf<Servicio?>(null) }
+    // Recordar el objeto seleccionado
 
+    // Como lazycolumn, este también es escrolleable pero permite crear grids omgg
+    LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.padding(16.dp)) {
+        items(servicios){
+            servicio ->
+                Card(
+                    //Dar click a la tarjeta selecciona un servicio
+                    modifier = Modifier.padding(8.dp).height(120.dp).clickable{servicioElegido = servicio},
+                    // Este tipo de color viene de un repo, asi como los CSS frameworks
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(servicio.icon, contentDescription = null, modifier = Modifier.size(40.dp))
+                        Text(servicio.nombre, style = MaterialTheme.typography.titleMedium)
+                        // Asignar icono y nombre del servicio a la cartajeta
+                    }
+                }
+        }
+    }
+    if (servicioElegido != null)
+        // Muestra en detalle la información del servicio cuando es elegido
+        AlertDialog(
+            onDismissRequest = {servicioElegido = null},
+            icon = {Icon(servicioElegido!!.icon,"")},
+            title = {Text(servicioElegido!!.nombre)},
+            text = {Text(servicioElegido!!.info)},
+            confirmButton = { TextButton(onClick = {servicioElegido = null}) { Text("Cerrar") }}
+        )
 }
 
 @Composable
 fun EventosScreen(user: Usuario){
+    val eventos = remember { mutableStateListOf(
+        Evento(1,"Casa Abierta", "Jueves 24", "Descubre clubes y amistades"),
+        Evento(2,"Miércoles Cultural","Miércoles 23","Disfruta de música en vivo")
+    ) }
+    LazyColumn(modifier = Modifier.padding(16.dp)) {
+        items(eventos){ evento ->
+            Card(modifier = Modifier.fillMaxWidth().padding(16.dp)){
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(evento.titulo, style = MaterialTheme.typography.titleLarge)
+                    Text(evento.fecha, color = Color.Blue)
+                    Text(evento.descripcion)
+                    Spacer(modifier = Modifier.height(8.dp))
 
+                    if(evento.isRegistrado){
+                        Button(
+                            onClick = {evento.isRegistrado = false},
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                        ) { Text("Cancelar Registro") }
+                    }
+                    else {
+                        Button(onClick = {evento.isRegistrado = true})
+                        { Text("Registrarse") }
+                    }
+                    if (user.isAdmin){
+                        TextButton(onClick = { }) { Text("ELIMINAR", color = Color.Red)}
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
