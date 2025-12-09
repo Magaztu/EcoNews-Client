@@ -1,5 +1,22 @@
 package com.example.preludio
 
+// Configuración de la conexión al backend
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.DELETE
+import retrofit2.http.Path
+// Métodos HTTP
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+// Usar websockets
+import io.socket.client.IO
+import io.socket.client.Socket
+import com.google.gson.Gson
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import com.google.gson.annotations.SerializedName
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -64,12 +81,25 @@ data class Usuario(
 )
 // Por ahora usaré usuarios como objetos, no sé si sea compatible con la db
 
+//data class Post(
+//    val id: String, // porque la databsae usa string para whatsapapi
+//    val autor: String,
+//    val contenido: String,
+//    val categoria: String = "General",
+//    val fecha: String = "Ahora", // Debería cambiarlo por un date.now().toString o algo asi
+//)
+
 data class Post(
-    val id: Int,
-    val autor: String,
+    // Serialized indica cuál cabecera del body JSON corresponde a cada campo
+    @SerializedName("whatsappId")
+    val id: String = "",
+    @SerializedName("from")
+    val autor: String = "Sistema",
+    @SerializedName("body")
     val contenido: String,
     val categoria: String = "General",
-    val fecha: String = "Ahora", // Debería cambiarlo por un date.now().toString o algo asi
+    @SerializedName("createdAt")
+    val fecha: String = ""
 )
 
 data class Evento(
@@ -201,6 +231,7 @@ fun PreludioApp(currentUser: Usuario) {
     var showCreateDialog by remember { mutableStateOf(false) }
     // Para mostrar dialogos en algunas partes
 
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     //Esta parte en verde se encarga de definir la posición de la barra de navegación
@@ -253,12 +284,18 @@ fun PreludioApp(currentUser: Usuario) {
                     AppDestinations.PERFIL -> PerfilScreen(currentUser)
                 }
             }
-            if (showCreateDialog){
+            if (showCreateDialog) {
                 CreatePostDialog(
                     destination = currentDestination,
-                    onDismiss = {showCreateDialog = false},
-                    onSubmit = {text, categoria ->
-                        Toast.makeText(context, "Se creó en ${currentDestination.label}: $text", Toast.LENGTH_SHORT).show()
+                    onDismiss = { showCreateDialog = false },
+                    onSubmit = { text, categoria ->
+                        if (currentDestination == AppDestinations.ANUNCIOS) {
+                             scope.launch {
+                                NetworkUtils.api.publishPost(PostBody(text))
+                             }
+                            Toast.makeText(context, "Enviando a WhatsApp...", Toast.LENGTH_SHORT).show()
+                        }
+
                         showCreateDialog = false
                     }
                 )
@@ -282,10 +319,73 @@ enum class AppDestinations(
 @Composable
 fun AnunciosScreen(user: Usuario){
     // Simular entrdas hasta que me salga bien la base de datos
-    val posts = remember { listOf(
-        Post(1,"Mathias", "Clases canceladas por el presidente", "General"),
-        Post(2,"Dylan", "Mañana habre el nuevo complejo", "General"),
-        ) }
+//    val posts = remember { listOf(
+//        Post("1","Mathias", "Clases canceladas por el presidente", "General"),
+//        Post("2","Dylan", "Mañana habre el nuevo complejo", "General"),
+//        ) }
+    val posts = remember { mutableStateListOf<Post>() }
+    val scope = rememberCoroutineScope() // Permite lanzar las llamadas al API en segundo plano
+    val context = LocalContext.current
+
+    // Rutina de fetchear posts, para saber qué hay en el historial
+    LaunchedEffect(Unit) {
+        try {
+            val history = NetworkUtils.api.getPosts()
+            posts.clear() //limpiar lista
+            posts.addAll(history) //añadir valores a la lista
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Configuración del websocket
+    DisposableEffect(Unit) {
+        var socket: Socket? = null
+        try {
+            socket = IO.socket(NetworkUtils.BASE_URL) // Se crea el socket hacia la apiii
+            socket.connect()
+
+            // Actuar cuando llega el evento "new_post"
+            socket.on("new_post") { args ->
+                if (args.isNotEmpty()) {
+                    val data = args[0] as JSONObject
+                    val gson = Gson()
+                    // Mappear el JSON a la clase
+                    try {
+                        val newPost = gson.fromJson(data.toString(), Post::class.java)
+
+                        scope.launch {
+                            // Evitar duplicados o condiciones de carrera
+                            if (posts.none { it.id == newPost.id }) {
+                                posts.add(0, newPost)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            // Otro evento, post borrao
+            socket.on("post_deleted") { args ->
+                val data = args[0] as JSONObject
+                val idToDelete = data.getString("id")
+                scope.launch {
+                    posts.removeAll { it.id == idToDelete }
+                }
+            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        //Desconectarse al reensamblar la app
+        onDispose {
+            socket?.disconnect()
+        }
+    }
+
     // Los lazy columns son básicamente listas scrolleables
     LazyColumn(modifier = Modifier
         .fillMaxSize()
@@ -293,15 +393,26 @@ fun AnunciosScreen(user: Usuario){
         item {Text("Anuncios oficiales", style = MaterialTheme.typography.titleMedium)}
 
         // Crea un "titulo" y luego para cada post muestra su info
-        items(posts) {
+        items(posts, key = {it.id}) {
             post -> Card(modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(post.contenido, style = MaterialTheme.typography.bodyLarge)
                     Text(post.fecha, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    if (user.isAdmin){
-                        TextButton(onClick = { }) { Text("ELIMINAR", color = Color.Red)}
+                    if (user.isAdmin) {
+                        TextButton(onClick = {
+                            scope.launch {
+                                try {
+                                    NetworkUtils.api.deletePost(post.id)
+                                    Toast.makeText(context, "Eliminando...", Toast.LENGTH_SHORT).show()
+                                } catch(e: Exception) {
+                                    Toast.makeText(context, "Error al eliminar", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }) {
+                            Text("ELIMINAR", color = Color.Red)
+                        }
                     }
                     // Borar sólo admins
                 }
@@ -315,9 +426,9 @@ fun ComunidadScreen(user: Usuario){
     var filtro by remember { mutableStateOf("Todos") }
     val categorias = listOf("Todos", "Comida", "Servicios", "Materiales")
     val posts = listOf(
-        Post(1, "Jorge", "Vendo calculadora", "Materiales"),
-        Post(2,"Maria","Se realizan perforaciones", "Servicios"),
-        Post(3, "Paco", "Vendo chimichangas", "Comida")
+        Post("1", "Jorge", "Vendo calculadora", "Materiales"),
+        Post("2","Maria","Se realizan perforaciones", "Servicios"),
+        Post("3", "Paco", "Vendo chimichangas", "Comida")
     )
     val postsFiltrados = if (filtro == "Todos") posts else posts.filter { it.categoria == filtro }
     // Filtrar por categoria
@@ -541,3 +652,34 @@ fun CreatePostDialog(destination: AppDestinations, onDismiss: () -> Unit, onSubm
 //        Greeting("Android")
 //    }
 //}
+
+
+// Clase que define a un objeto para enviar posts (lo pide la doc??)
+data class PostBody(val text: String)
+
+// Definir las rutas, similar a cuando usabamos Java.io.File
+interface WahaApi {
+    @GET("api/waha/posts")
+    suspend fun getPosts(): List<Post>
+
+    @POST("api/waha/publish")
+    suspend fun publishPost(@Body body: PostBody): retrofit2.Response<Any>
+
+    @DELETE("api/waha/posts/{id}")
+    suspend fun deletePost(@Path("id") id: String): retrofit2.Response<Any>
+    // Aqui path es equivalente a params
+}
+
+// SINGLETON como en software 2 waos, object significa eso
+object NetworkUtils {
+    // Puerto y url para el emulador del cel
+    const val BASE_URL = "http://10.0.2.2:3001/"
+
+    val api: WahaApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BASE_URL)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(WahaApi::class.java)
+    }
+}

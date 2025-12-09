@@ -36,6 +36,7 @@ android {
     kotlinOptions {
         jvmTarget = "11"
         freeCompilerArgs += "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api"
+        // Para usar el NavigationSuite
     }
     buildFeatures {
         compose = true
@@ -54,6 +55,12 @@ dependencies {
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     testImplementation(libs.junit)
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
+    // Iconos adicionales
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("io.socket:socket.io-client:2.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // Me permite interactuar con la API
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
