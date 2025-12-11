@@ -18,40 +18,11 @@ import org.json.JSONObject
 import com.google.gson.annotations.SerializedName
 
 import android.os.Bundle
+import android.util.Patterns
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
-import com.example.preludio.ui.theme.PreludioTheme
-import android.util.Patterns
-import android.widget.Toast
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,12 +30,16 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -75,22 +50,13 @@ import com.example.preludio.ui.theme.PreludioTheme
 data class Usuario(
     val nombre: String,
     val email: String,
+    val contrasena: String,
     val isAdmin: Boolean,
     var bio: String = "",
-    var carrera: String  =""
+    var carrera: String = ""
 )
-// Por ahora usaré usuarios como objetos, no sé si sea compatible con la db
-
-//data class Post(
-//    val id: String, // porque la databsae usa string para whatsapapi
-//    val autor: String,
-//    val contenido: String,
-//    val categoria: String = "General",
-//    val fecha: String = "Ahora", // Debería cambiarlo por un date.now().toString o algo asi
-//)
 
 data class Post(
-    // Serialized indica cuál cabecera del body JSON corresponde a cada campo
     @SerializedName("whatsappId")
     val id: String = "",
     @SerializedName("from")
@@ -112,30 +78,53 @@ data class Evento(
 
 data class Servicio(
     val nombre: String,
-    val icon: ImageVector, // supongo que es como los enums
+    val icon: ImageVector,
     val info: String
 )
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Crea pantalla completa
         enableEdgeToEdge()
         setContent {
             PreludioTheme {
-//                PreludioApp()
-                // Información para el loggeo, por defecto se asume que es falso
-                var isLoggedin by remember { mutableStateOf(false)}
-                var currentUser by remember { mutableStateOf<Usuario?>(null)}
+                var isLoggedin by remember { mutableStateOf(false) }
+                var currentUser by remember { mutableStateOf<Usuario?>(null) }
+                val users = remember { mutableStateListOf(Usuario("admin", "admin@admin.com", "admin", true)) }
+                val context = LocalContext.current
 
-                if (isLoggedin && currentUser != null){
-                    //Hay loggeo
-                    PreludioApp(currentUser = currentUser!!) // Hace que User? sea User nomrla
-                }else{
+                if (isLoggedin && currentUser != null) {
+                    PreludioApp(
+                        currentUser = currentUser!!,
+                        onLogout = {
+                            isLoggedin = false
+                            currentUser = null
+                            Toast.makeText(context, "Sesión cerrada", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                } else {
                     LoginApp(
-                        onLoginSuccess = { user ->
-                            currentUser = user
-                            isLoggedin = true
+                        onLoginRequest = { email, password ->
+                            val user = users.find { it.email == email && it.contrasena == password }
+                            if (user != null) {
+                                currentUser = user
+                                isLoggedin = true
+                                Toast.makeText(context, "Inicio de sesión exitoso", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Email o contraseña incorrectos", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onRegisterRequest = { email, password ->
+                            if (users.any { it.email == email }) {
+                                Toast.makeText(context, "El email ya está en uso", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val isAdmin = email.endsWith("@admin.com")
+                                val newUser = Usuario(email.split("@")[0], email, password, isAdmin)
+                                users.add(newUser)
+                                currentUser = newUser
+                                isLoggedin = true
+                                Toast.makeText(context, "Registro exitoso", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
                 }
@@ -145,220 +134,103 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun LoginApp(onLoginSuccess: (Usuario) -> Unit){ // Recursivo como en Pybodrio, se llama a sí mismo
+fun LoginApp(onLoginRequest: (String, String) -> Unit, onRegisterRequest: (String, String) -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isRegistrando by remember { mutableStateOf(false) }
-    var context = LocalContext.current
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(32.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally // Autocompletado de android studio, pero
-                                                        // Entiendo que es ccomo align items en html
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = if (isRegistrando) "Registrarse" else "Iniciar sesión",
             fontSize = 24.sp,
-                                // Otra vez autocompletado watafak
         )
-        Spacer(modifier = Modifier.height(32.dp)) // Es como hr en html, un espaciado o salto
+        Spacer(modifier = Modifier.height(32.dp))
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it }, // Ya me da miedo el autoompletar
-            label = {Text("Email")},
-            leadingIcon = {Icon(Icons.Default.Email, contentDescription = null)}, // otro autocompletado, pero tiene sentido
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = {Text("Contraseña")},
-            visualTransformation = PasswordVisualTransformation(), //Esconde los caracteres
-            leadingIcon = {Icon(Icons.Default.Lock, contentDescription = null)},
-            modifier = Modifier.fillMaxWidth() // No confundir con size
+            label = { Text("Contraseña") },
+            visualTransformation = PasswordVisualTransformation(),
+            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+            modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = {
-                // Correo válido
-                if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()){
+                if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                     Toast.makeText(context, "Email inválido", Toast.LENGTH_SHORT).show()
                     return@Button
                 }
-                // Contraseña no corta
-                if (password.length < 4){
-                    Toast.makeText(context, "Contraseña inválida", Toast.LENGTH_SHORT).show()
+                if (password.length < 4) {
+                    Toast.makeText(context, "Contraseña inválida (min. 4 caracteres)", Toast.LENGTH_SHORT).show()
                     return@Button
-
                 }
-                // Lógica si se registra un usuario
-                if(isRegistrando){
-                    val Nuevo = Usuario(email.split("@")[0], email, false)
-                    // Crea un nuevo usuario y se asume que el inicio del correo es el nombre
-                    onLoginSuccess(Nuevo) // Sale de la función proque ya no es null
-                    Toast.makeText(context, "Registro exitoso", Toast.LENGTH_SHORT).show()
-
+                if (isRegistrando) {
+                    onRegisterRequest(email, password)
+                } else {
+                    onLoginRequest(email, password)
                 }
-                // Ya sebería existir el admin
-                else{
-                    val isAdmin = email.endsWith("@admin.com")
-                    val user = Usuario(email.split("@")[0], email, isAdmin)
-                    onLoginSuccess(user)
-                    Toast.makeText(context, "Inicio de sesión exitoso", Toast.LENGTH_SHORT).show()
-                }
-                // Se asume que el usuario igual existe, tengo que solucionarlo con la database
             }, modifier = Modifier.fillMaxWidth()
-        ){
-            Text(if (isRegistrando) "Registrarse" else "Iniciar sesión") // Colocar opción
+        ) {
+            Text(if (isRegistrando) "Registrarse" else "Iniciar sesión")
         }
         TextButton(onClick = { isRegistrando = !isRegistrando }) {
-            Text(if (isRegistrando) "Iniciar sesión" else "Registrarse")
+            Text(if (isRegistrando) "¿Ya tienes cuenta? Inicia sesión" else "¿No tienes cuenta? Regístrate")
         }
-        // Es como los links url, un boton de texto, cambia al estado contrario porque solo hay 2 posibles casos
     }
 }
 
-//@PreviewScreenSizes
 @Composable
-fun PreludioApp(currentUser: Usuario) {
+fun PreludioApp(currentUser: Usuario, onLogout: () -> Unit) {
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.ANUNCIOS) }
-    // Guarda la posición actual del usuario en la app, similar a los checkboxes
-
     var showCreateDialog by remember { mutableStateOf(false) }
-    // Para mostrar dialogos en algunas partes
-
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    //Esta parte en verde se encarga de definir la posición de la barra de navegación
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            // Bucle para cada enum, crea los botones de la barra
-            AppDestinations.entries.forEach {
-                item(
-                    icon = {
-                        Icon(
-                            it.icon,
-                            contentDescription = it.label
-                        )
-                    },
-                    label = { Text(it.label) },
-                    selected = it == currentDestination,
-                    onClick = { currentDestination = it }
-                )
-            }
-        }
-    ) {
-        // El modifier que hemos visto en clase está aquí
-        Scaffold(topBar = {
-            if (currentDestination != AppDestinations.PERFIL){
-                CenterAlignedTopAppBar(
-                    title = {Text("EcoNews")},
-                    actions = {
-                        // Aqui pongo las bolitas de crear cosas si es user o admin
-                        val canPostAnuncio = currentDestination == AppDestinations.ANUNCIOS && currentUser.isAdmin
-                        val canPostComunidad = currentDestination == AppDestinations.COMUNIDAD
-                        val canPostEvento = currentDestination == AppDestinations.EVENTOS && currentUser.isAdmin
+    // State lists for dynamic content
+    val announcementPosts = remember { mutableStateListOf<Post>() }
+    val communityPosts = remember { mutableStateListOf<Post>() }
+    val eventItems = remember { mutableStateListOf<Evento>() }
 
-                        if(canPostAnuncio || canPostComunidad || canPostEvento){
-                            IconButton(onClick = {showCreateDialog = true}) {
-                                Icon(Icons.Default.Add, contentDescription = "Crear")
-                            }
-                        }
-
-                    }
-                )
-        }
-        }) { innerPadding ->
-            // Hace que la barrita de arriba tenga padding apra cada pantalla
-            Box(modifier = Modifier.padding(innerPadding)){
-                when (currentDestination){
-                    AppDestinations.ANUNCIOS -> AnunciosScreen(currentUser)
-                    AppDestinations.COMUNIDAD -> ComunidadScreen(currentUser)
-                    AppDestinations.SERVICIOS -> ServiciosScreen(currentUser)
-                    AppDestinations.EVENTOS -> EventosScreen(currentUser)
-                    AppDestinations.PERFIL -> PerfilScreen(currentUser)
-                }
-            }
-            if (showCreateDialog) {
-                CreatePostDialog(
-                    destination = currentDestination,
-                    onDismiss = { showCreateDialog = false },
-                    onSubmit = { text, categoria ->
-                        if (currentDestination == AppDestinations.ANUNCIOS) {
-                             scope.launch {
-                                NetworkUtils.api.publishPost(PostBody(text))
-                             }
-                            Toast.makeText(context, "Enviando a WhatsApp...", Toast.LENGTH_SHORT).show()
-                        }
-
-                        showCreateDialog = false
-                    }
-                )
-            }
-        }
-    }
-}
-
-// Este ENUM vino con la plantilla y define los botones de la barrita
-enum class AppDestinations(
-    val label: String,
-    val icon: ImageVector,
-) {
-    ANUNCIOS("Anuncios", Icons.Default.Notifications),
-    COMUNIDAD("Comunidad", Icons.Default.ShoppingCart),
-    SERVICIOS("Servicios", Icons.Default.Search),
-    EVENTOS("Eventos", Icons.Default.DateRange),
-    PERFIL("Perfil", Icons.Default.AccountCircle),
-}
-
-@Composable
-fun AnunciosScreen(user: Usuario){
-    // Simular entrdas hasta que me salga bien la base de datos
-//    val posts = remember { listOf(
-//        Post("1","Mathias", "Clases canceladas por el presidente", "General"),
-//        Post("2","Dylan", "Mañana habre el nuevo complejo", "General"),
-//        ) }
-    val posts = remember { mutableStateListOf<Post>() }
-    val scope = rememberCoroutineScope() // Permite lanzar las llamadas al API en segundo plano
-    val context = LocalContext.current
-
-    // Rutina de fetchear posts, para saber qué hay en el historial
     LaunchedEffect(Unit) {
         try {
             val history = NetworkUtils.api.getPosts()
-            posts.clear() //limpiar lista
-            posts.addAll(history) //añadir valores a la lista
+            announcementPosts.clear()
+            announcementPosts.addAll(history)
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Error fetching history: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // Configuración del websocket
     DisposableEffect(Unit) {
         var socket: Socket? = null
         try {
-            socket = IO.socket(NetworkUtils.BASE_URL) // Se crea el socket hacia la apiii
-            socket.connect()
+            socket = IO.socket(NetworkUtils.BASE_URL)
+            val gson = Gson()
 
-            // Actuar cuando llega el evento "new_post"
-            socket.on("new_post") { args ->
+            val onNewPost = io.socket.emitter.Emitter.Listener { args ->
                 if (args.isNotEmpty()) {
                     val data = args[0] as JSONObject
-                    val gson = Gson()
-                    // Mappear el JSON a la clase
                     try {
                         val newPost = gson.fromJson(data.toString(), Post::class.java)
-
                         scope.launch {
-                            // Evitar duplicados o condiciones de carrera
-                            if (posts.none { it.id == newPost.id }) {
-                                posts.add(0, newPost)
+                            if (announcementPosts.none { it.id == newPost.id }) {
+                                announcementPosts.add(0, newPost)
                             }
                         }
                     } catch (e: Exception) {
@@ -367,36 +239,142 @@ fun AnunciosScreen(user: Usuario){
                 }
             }
 
-            // Otro evento, post borrao
-            socket.on("post_deleted") { args ->
+            val onPostDeleted = io.socket.emitter.Emitter.Listener { args ->
                 val data = args[0] as JSONObject
                 val idToDelete = data.getString("id")
                 scope.launch {
-                    posts.removeAll { it.id == idToDelete }
+                    announcementPosts.removeAll { it.id == idToDelete }
                 }
             }
+
+            socket.on("new_post", onNewPost)
+            socket.on("post_deleted", onPostDeleted)
+            socket.connect()
 
         } catch (e: Exception) {
             e.printStackTrace()
         }
 
-        //Desconectarse al reensamblar la app
         onDispose {
+            socket?.off("new_post")
+            socket?.off("post_deleted")
             socket?.disconnect()
         }
     }
 
-    // Los lazy columns son básicamente listas scrolleables
+    NavigationSuiteScaffold(
+        navigationSuiteItems = {
+            AppDestinations.entries.forEach {
+                item(
+                    icon = { Icon(it.icon, contentDescription = it.label) },
+                    label = { Text(it.label) },
+                    selected = it == currentDestination,
+                    onClick = { currentDestination = it }
+                )
+            }
+        }
+    ) {
+        Scaffold(topBar = {
+            if (currentDestination != AppDestinations.PERFIL) {
+                CenterAlignedTopAppBar(
+                    title = { Text("EcoNews") },
+                    actions = {
+                        val showButton = when (currentDestination) {
+                            AppDestinations.ANUNCIOS -> currentUser.isAdmin
+                            AppDestinations.COMUNIDAD, AppDestinations.EVENTOS -> true
+                            else -> false
+                        }
+
+                        if (showButton) {
+                            IconButton(onClick = { showCreateDialog = true }) {
+                                Icon(Icons.Default.Add, contentDescription = "Crear")
+                            }
+                        }
+                    }
+                )
+            }
+        }) { innerPadding ->
+            Box(modifier = Modifier.padding(innerPadding)) {
+                when (currentDestination) {
+                    AppDestinations.ANUNCIOS -> AnunciosScreen(
+                        user = currentUser,
+                        posts = announcementPosts
+                    )
+                    AppDestinations.COMUNIDAD -> ComunidadScreen(
+                        user = currentUser,
+                        posts = communityPosts,
+                        onDeletePost = { post -> communityPosts.remove(post) }
+                    )
+                    AppDestinations.SERVICIOS -> ServiciosScreen(user = currentUser)
+                    AppDestinations.EVENTOS -> EventosScreen(
+                        user = currentUser,
+                        eventos = eventItems,
+                        onDeleteEvent = { evento -> eventItems.remove(evento) }
+                    )
+                    AppDestinations.PERFIL -> PerfilScreen(user = currentUser, onLogout = onLogout)
+                }
+            }
+
+            if (showCreateDialog) {
+                CreatePostDialog(
+                    destination = currentDestination,
+                    onDismiss = { showCreateDialog = false },
+                    onSubmit = { text, categoria ->
+                        when (currentDestination) {
+                            AppDestinations.COMUNIDAD -> {
+                                val newPost = Post(
+                                    id = System.currentTimeMillis().toString(),
+                                    autor = currentUser.nombre,
+                                    contenido = text,
+                                    categoria = categoria,
+                                    fecha = "Ahora"
+                                )
+                                communityPosts.add(0, newPost)
+                            }
+                            AppDestinations.EVENTOS -> {
+                                val newEvent = Evento(
+                                    id = System.currentTimeMillis().toInt(),
+                                    titulo = text,
+                                    fecha = "Ahora",
+                                    descripcion = "Creado por ${currentUser.nombre}"
+                                )
+                                eventItems.add(0, newEvent)
+                            }
+                            AppDestinations.ANUNCIOS -> {
+                                scope.launch {
+                                    try {
+                                        NetworkUtils.api.publishPost(PostBody(text))
+                                        Toast.makeText(context, "Anuncio publicado", Toast.LENGTH_SHORT).show()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error al publicar", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                            else -> {}
+                        }
+                        showCreateDialog = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+fun AnunciosScreen(user: Usuario, posts: List<Post>){
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
     LazyColumn(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)){
         item {Text("Anuncios oficiales", style = MaterialTheme.typography.titleMedium)}
 
-        // Crea un "titulo" y luego para cada post muestra su info
-        items(posts, key = {it.id}) {
-            post -> Card(modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)) {
+        items(posts, key = {it.id}) { post ->
+            Card(modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(post.contenido, style = MaterialTheme.typography.bodyLarge)
                     Text(post.fecha, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -414,7 +392,6 @@ fun AnunciosScreen(user: Usuario){
                             Text("ELIMINAR", color = Color.Red)
                         }
                     }
-                    // Borar sólo admins
                 }
             }
         }
@@ -422,23 +399,16 @@ fun AnunciosScreen(user: Usuario){
 }
 
 @Composable
-fun ComunidadScreen(user: Usuario){
+fun ComunidadScreen(user: Usuario, posts: List<Post>, onDeletePost: (Post) -> Unit){
     var filtro by remember { mutableStateOf("Todos") }
     val categorias = listOf("Todos", "Comida", "Servicios", "Materiales")
-    val posts = listOf(
-        Post("1", "Jorge", "Vendo calculadora", "Materiales"),
-        Post("2","Maria","Se realizan perforaciones", "Servicios"),
-        Post("3", "Paco", "Vendo chimichangas", "Comida")
-    )
     val postsFiltrados = if (filtro == "Todos") posts else posts.filter { it.categoria == filtro }
-    // Filtrar por categoria
+
     Column(modifier = Modifier
         .fillMaxSize()
         .padding(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             categorias.forEach { card ->
-                // Estas son tarjetitas que filtran automaticamente el contenido
-                // Sus opciones se parecen mucho a los checkboxes / radio buttons
                 FilterChip(
                     selected = filtro == card,
                     onClick = { filtro = card },
@@ -448,20 +418,25 @@ fun ComunidadScreen(user: Usuario){
         }
         Spacer(modifier = Modifier.height(8.dp))
 
-        LazyColumn{
-            items(postsFiltrados){ post ->
-                Card(modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()){
-                            Text(post.autor, style = MaterialTheme.typography.titleSmall)
-                            SuggestionChip(onClick = {}, label = { Text(post.categoria) })
-                        }
-                        Text(post.contenido)
-                        // Borrar sólo si es admin o autor
-                        if (user.isAdmin||user.nombre == post.autor){
-                            TextButton(onClick = { }) { Text("ELIMINAR", color = Color.Red)}
+        if (posts.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No hay publicaciones. ¡Crea una!")
+            }
+        } else {
+            LazyColumn{
+                items(postsFiltrados, key = { it.id }){ post ->
+                    Card(modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()){
+                                Text(post.autor, style = MaterialTheme.typography.titleSmall)
+                                SuggestionChip(onClick = {}, label = { Text(post.categoria) })
+                            }
+                            Text(post.contenido)
+                            if (user.isAdmin || user.nombre == post.autor){
+                                TextButton(onClick = { onDeletePost(post) }) { Text("ELIMINAR", color = Color.Red)}
+                            }
                         }
                     }
                 }
@@ -469,6 +444,7 @@ fun ComunidadScreen(user: Usuario){
         }
     }
 }
+
 @Composable
 fun ServiciosScreen(user: Usuario){
     val servicios = listOf(
@@ -478,16 +454,15 @@ fun ServiciosScreen(user: Usuario){
         Servicio("Biblioteca", Icons.Default.LocalLibrary, "Registrarse con QR al ingresar")
     )
     var servicioElegido by remember { mutableStateOf<Servicio?>(null) }
-    // Recordar el objeto seleccionado
 
-    // Como lazycolumn, este también es escrolleable pero permite crear grids omgg
     LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.padding(16.dp)) {
         items(servicios){
             servicio ->
                 Card(
-                    //Dar click a la tarjeta selecciona un servicio
-                    modifier = Modifier.padding(8.dp).height(120.dp).clickable{servicioElegido = servicio},
-                    // Este tipo de color viene de un repo, asi como los CSS frameworks
+                    modifier = Modifier
+                        .padding(8.dp)
+                        .height(120.dp)
+                        .clickable{servicioElegido = servicio},
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                 ) {
                     Column(
@@ -497,13 +472,11 @@ fun ServiciosScreen(user: Usuario){
                     ) {
                         Icon(servicio.icon, contentDescription = null, modifier = Modifier.size(40.dp))
                         Text(servicio.nombre, style = MaterialTheme.typography.titleMedium)
-                        // Asignar icono y nombre del servicio a la cartajeta
                     }
                 }
         }
     }
     if (servicioElegido != null)
-        // Muestra en detalle la información del servicio cuando es elegido
         AlertDialog(
             onDismissRequest = {servicioElegido = null},
             icon = {Icon(servicioElegido!!.icon,"")},
@@ -514,32 +487,37 @@ fun ServiciosScreen(user: Usuario){
 }
 
 @Composable
-fun EventosScreen(user: Usuario){
-    val eventos = remember { mutableStateListOf(
-        Evento(1,"Casa Abierta", "Jueves 24", "Descubre clubes y amistades"),
-        Evento(2,"Miércoles Cultural","Miércoles 23","Disfruta de música en vivo")
-    ) }
-    LazyColumn(modifier = Modifier.padding(16.dp)) {
-        items(eventos){ evento ->
-            Card(modifier = Modifier.fillMaxWidth().padding(16.dp)){
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(evento.titulo, style = MaterialTheme.typography.titleLarge)
-                    Text(evento.fecha, color = Color.Blue)
-                    Text(evento.descripcion)
-                    Spacer(modifier = Modifier.height(8.dp))
+fun EventosScreen(user: Usuario, eventos: List<Evento>, onDeleteEvent: (Evento) -> Unit){
+    if (eventos.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No hay eventos. ¡Crea uno!")
+        }
+    } else {
+        LazyColumn(modifier = Modifier.padding(16.dp)) {
+            items(eventos, key = { it.id }){ evento ->
+                var isRegistered by rememberSaveable { mutableStateOf(evento.isRegistrado) }
+                Card(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)){
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(evento.titulo, style = MaterialTheme.typography.titleLarge)
+                        Text(evento.fecha, color = Color.Blue)
+                        Text(evento.descripcion)
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                    if(evento.isRegistrado){
-                        Button(
-                            onClick = {evento.isRegistrado = false},
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
-                        ) { Text("Cancelar Registro") }
-                    }
-                    else {
-                        Button(onClick = {evento.isRegistrado = true})
-                        { Text("Registrarse") }
-                    }
-                    if (user.isAdmin){
-                        TextButton(onClick = { }) { Text("ELIMINAR", color = Color.Red)}
+                        if(isRegistered){
+                            Button(
+                                onClick = { isRegistered = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)
+                            ) { Text("Cancelar Registro") }
+                        }
+                        else {
+                            Button(onClick = { isRegistered = true })
+                            { Text("Registrarse") }
+                        }
+                        if (user.isAdmin){
+                            TextButton(onClick = { onDeleteEvent(evento) }) { Text("ELIMINAR", color = Color.Red)}
+                        }
                     }
                 }
             }
@@ -548,13 +526,16 @@ fun EventosScreen(user: Usuario){
 }
 
 @Composable
-fun PerfilScreen(user: Usuario){
+fun PerfilScreen(user: Usuario, onLogout: () -> Unit){
     var bio by remember { mutableStateOf(user.bio) }
     var carrera by remember { mutableStateOf(user.carrera) }
     val context = LocalContext.current
 
-    Column(modifier = Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // Simula fotito de perfil
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(24.dp), 
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Icon(Icons.Default.AccountCircle, null, modifier = Modifier.size(100.dp), tint = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -565,7 +546,7 @@ fun PerfilScreen(user: Usuario){
         OutlinedTextField(
             value = carrera,
             onValueChange = { carrera = it },
-            label = { Text("Career") },
+            label = { Text("Carrera") },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -573,18 +554,23 @@ fun PerfilScreen(user: Usuario){
         OutlinedTextField(
             value = bio,
             onValueChange = { bio = it },
-            label = { Text("Bio / Status") },
+            label = { Text("Bio / Estado") },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = {
-            // Actualizar campos
             user.carrera = carrera
             user.bio = bio
             Toast.makeText(context, "Perfil actualizado", Toast.LENGTH_SHORT).show()
         }) {
             Text("Guardar cambios")
+        }
+
+        Spacer(Modifier.weight(1f))
+
+        TextButton(onClick = onLogout) {
+            Text("Cerrar Sesión", color = Color.Red)
         }
     }
 }
@@ -594,33 +580,40 @@ fun CreatePostDialog(destination: AppDestinations, onDismiss: () -> Unit, onSubm
     var text by remember { mutableStateOf("") }
     var categoriaSeleccionada by remember { mutableStateOf("Materiales") }
     val categorias = listOf("Materiales", "Servicios", "Comida")
+    val context = LocalContext.current
 
     Dialog(onDismissRequest = onDismiss) {
         Card(modifier = Modifier.padding(16.dp)) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Crear post en ${destination.label}", style = MaterialTheme.typography.titleLarge)
+                val title = when(destination) {
+                    AppDestinations.ANUNCIOS -> "Nuevo Anuncio"
+                    AppDestinations.COMUNIDAD -> "Nueva Publicación"
+                    AppDestinations.EVENTOS -> "Nuevo Evento"
+                    else -> "Crear"
+                }
+                Text(title, style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Dialogos para crear psots en eventosm comunidad y anuncios
+                val label = if (destination == AppDestinations.EVENTOS) "Título del Evento" else "Contenido"
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("Contenido") },
-                    modifier = Modifier.fillMaxWidth().height(150.dp)
-
+                    label = { Text(label) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
                 )
-                //En el caso de comunidad, se puede elegir una categoria
+
                 if(destination == AppDestinations.COMUNIDAD){
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("Categoría:")
 
-                    categorias.forEach { card ->
-                        Row {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                         categorias.forEach { card ->
                             FilterChip(
                                 selected = categoriaSeleccionada == card,
                                 onClick = { categoriaSeleccionada = card },
-                                label = { Text(card) },
-                                modifier = Modifier.fillMaxWidth().padding(end = 4.dp)
+                                label = { Text(card) }
                             )
                         }
                     }
@@ -628,36 +621,33 @@ fun CreatePostDialog(destination: AppDestinations, onDismiss: () -> Unit, onSubm
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = onDismiss) { Text("Cancelar")}
-                    Button(onClick = { onSubmit(text, categoriaSeleccionada) }) { Text("Post") }
+                    Button(onClick = {
+                        if (text.isBlank()) {
+                            Toast.makeText(context, "El contenido no puede estar vacío", Toast.LENGTH_SHORT).show()
+                        } else {
+                            onSubmit(text, categoriaSeleccionada)
+                        }
+                    }) { Text("Post") }
                 }
             }
         }
     }
 }
 
-//@Composable
-//fun Greeting(name: String, modifier: Modifier = Modifier) {
-//    // Muestra un bloque de texto en pantalla
-//    Text(
-//        text = "Hello $name!",
-//        modifier = modifier
-//    )
-//}
-
-// Preview para greeting que permtie ver su uso sin compilar el proyecto
-//@Preview(showBackground = true)
-//@Composable
-//fun GreetingPreview() {
-//    PreludioTheme {
-//        Greeting("Android")
-//    }
-//}
+enum class AppDestinations(
+    val label: String,
+    val icon: ImageVector,
+) {
+    ANUNCIOS("Anuncios", Icons.Default.Notifications),
+    COMUNIDAD("Comunidad", Icons.Default.People),
+    SERVICIOS("Servicios", Icons.Default.Build),
+    EVENTOS("Eventos", Icons.Default.DateRange),
+    PERFIL("Perfil", Icons.Default.AccountCircle),
+}
 
 
-// Clase que define a un objeto para enviar posts (lo pide la doc??)
 data class PostBody(val text: String)
 
-// Definir las rutas, similar a cuando usabamos Java.io.File
 interface WahaApi {
     @GET("api/waha/posts")
     suspend fun getPosts(): List<Post>
@@ -667,12 +657,9 @@ interface WahaApi {
 
     @DELETE("api/waha/posts/{id}")
     suspend fun deletePost(@Path("id") id: String): retrofit2.Response<Any>
-    // Aqui path es equivalente a params
 }
 
-// SINGLETON como en software 2 waos, object significa eso
 object NetworkUtils {
-    // Puerto y url para el emulador del cel
     const val BASE_URL = "http://10.0.2.2:3001/"
 
     val api: WahaApi by lazy {
